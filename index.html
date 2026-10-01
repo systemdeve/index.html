@@ -953,6 +953,23 @@
     .float-contact a{font-size:.8rem; word-break:break-all;}
   }
 </style>
+<!-- Firebase (compat SDK) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBljrlt8mhAauELMUchmNAPt4h4ZSOStF0",
+    authDomain: "portfolio-systemdeve.firebaseapp.com",
+    projectId: "portfolio-systemdeve",
+    storageBucket: "portfolio-systemdeve.firebasestorage.app",
+    messagingSenderId: "226261339437",
+    appId: "1:226261339437:web:23150190d23834008717a4",
+    measurementId: "G-FBHKPX3232"
+  };
+  // The only account allowed to edit (must match the user you create in Firebase Authentication)
+  window.EDITOR_EMAIL = "clarencecabali.socmed@gmail.com";
+</script>
 </head>
 <body>
 
@@ -1228,15 +1245,15 @@
 <div class="modal-backdrop" id="passwordModalBackdrop">
   <div class="modal" style="max-width:380px;">
     <div class="modal-bar">
-      <h3>Enter password</h3>
+      <h3>Editor sign in</h3>
       <button class="modal-close" id="passwordModalClose" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <div id="passwordForm">
         <div class="field">
-          <label for="fPassword">Editing is password-protected</label>
+          <label for="fPassword">Sign in to edit (Firebase)</label>
           <input type="password" id="fPassword" required autocomplete="off" placeholder="Password">
-          <div class="hint" id="passwordError" style="display:none; color:var(--danger);">Incorrect password. Try again.</div>
+          <div class="hint" id="passwordError" style="display:none; color:var(--danger);">Sign-in failed. Check your password and try again.</div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn" id="passwordCancelBtn">Cancel</button>
@@ -1384,17 +1401,17 @@
   /* ---------- Storage ---------- */
   var PROFILE_KEY = 'clarence_profile_v2';
   var PROJECTS_KEY = 'clarence_portfolio_projects_v2';
-  var PASSWORD_KEY = 'clarence_edit_password_v1';
-  var DEFAULT_PASSWORD = 'cabali_30';
 
-  function loadPassword(){
-    try{
-      var raw = localStorage.getItem(PASSWORD_KEY);
-      if(raw) return raw;
-    }catch(e){}
-    return DEFAULT_PASSWORD;
-  }
-  function savePassword(pw){ try{ localStorage.setItem(PASSWORD_KEY, pw); }catch(e){} }
+  /* ---------- Firebase ---------- */
+  var fbReady = false, db = null, auth = null;
+  try{
+    if(window.firebase && window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey.indexOf('PASTE') !== 0){
+      firebase.initializeApp(window.FIREBASE_CONFIG);
+      auth = firebase.auth();
+      db = firebase.firestore();
+      fbReady = true;
+    }
+  }catch(e){ console.error('Firebase init failed', e); }
 
   var defaultProfile = {
     name:'Clarence Cabali',
@@ -1423,7 +1440,15 @@
     }catch(e){}
     return Object.assign({}, defaultProfile);
   }
-  function saveProfile(p){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); return true; }catch(e){ showToast('Storage is full — try a smaller picture'); return false; } }
+  function saveProfile(p){
+    try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }catch(e){}
+    if(fbReady && auth.currentUser){
+      db.collection('portfolio').doc('profile').set({ data: JSON.stringify(p), updated: firebase.firestore.FieldValue.serverTimestamp() })
+        .then(function(){ showToast('Saved online'); })
+        .catch(function(err){ console.error(err); showToast('Online save failed: ' + (err.code || 'error') + ' (picture may be too large)'); });
+    }
+    return true;
+  }
 
   function loadProjects(){
     try{
@@ -1433,7 +1458,15 @@
     saveProjects(defaultProjects);
     return defaultProjects.slice();
   }
-  function saveProjects(list){ try{ localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); return true; }catch(e){ showToast('Storage is full — try a smaller picture'); return false; } }
+  function saveProjects(list){
+    try{ localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); }catch(e){}
+    if(fbReady && auth.currentUser){
+      db.collection('portfolio').doc('projects').set({ data: JSON.stringify(list), updated: firebase.firestore.FieldValue.serverTimestamp() })
+        .then(function(){ showToast('Saved online'); })
+        .catch(function(err){ console.error(err); showToast('Online save failed: ' + (err.code || 'error') + ' (picture may be too large)'); });
+    }
+    return true;
+  }
 
   var profile = loadProfile();
   var projects = loadProjects();
@@ -1753,17 +1786,21 @@
   });
 
   function checkPassword(){
-    if(fPasswordInput.value === loadPassword()){
-      closePasswordModal();
-      unlockEditMode();
-    }else{
-      passwordError.style.display = 'block';
-      fPasswordInput.value = '';
-      fPasswordInput.focus();
-    }
+    if(!fbReady){ showToast('Firebase is not configured yet'); return; }
+    auth.signInWithEmailAndPassword(window.EDITOR_EMAIL, fPasswordInput.value)
+      .then(function(){
+        closePasswordModal();
+        unlockEditMode();
+      })
+      .catch(function(){
+        passwordError.style.display = 'block';
+        fPasswordInput.value = '';
+        fPasswordInput.focus();
+      });
   }
 
   function lockEditMode(){
+    if(fbReady) auth.signOut();
     editMode = false;
     document.getElementById('editBadge').classList.remove('show');
     document.getElementById('addProjectBtn').style.display = 'none';
@@ -1950,7 +1987,7 @@
 
     var wantsPwChange = !!(fCurrentPassword.value || fNewPassword.value || fConfirmPassword.value);
     if(wantsPwChange){
-      if(fCurrentPassword.value !== loadPassword()){ showToast('Current password is incorrect'); fCurrentPassword.focus(); return; }
+      if(!fCurrentPassword.value){ showToast('Enter your current password'); fCurrentPassword.focus(); return; }
       if(fNewPassword.value.length < 6){ showToast('New password must be at least 6 characters'); fNewPassword.focus(); return; }
       if(fNewPassword.value !== fConfirmPassword.value){ showToast('New passwords do not match'); fConfirmPassword.focus(); return; }
     }
@@ -1966,7 +2003,13 @@
     profile.skills = skillsList;
     Object.keys(profile.skillImages || {}).forEach(function(k){ if(skillsList.indexOf(k) === -1) delete profile.skillImages[k]; });
     if(pendingPhoto) profile.photo = pendingPhoto;
-    if(wantsPwChange) savePassword(fNewPassword.value);
+    if(wantsPwChange && fbReady && auth.currentUser){
+      var cred = firebase.auth.EmailAuthProvider.credential(window.EDITOR_EMAIL, fCurrentPassword.value);
+      auth.currentUser.reauthenticateWithCredential(cred)
+        .then(function(){ return auth.currentUser.updatePassword(fNewPassword.value); })
+        .then(function(){ showToast('Password updated'); })
+        .catch(function(){ showToast('Password not changed - current password was wrong'); });
+    }
 
     saveProfile(profile);
     renderProfile();
@@ -2183,6 +2226,17 @@
 
   setTimeout(openFaqCard, 1200);
 
+
+  /* ---------- Load saved details from Firestore (visible to everyone) ---------- */
+  (function(){
+    if(!fbReady) return;
+    db.collection('portfolio').doc('profile').get().then(function(d){
+      if(d.exists){ try{ profile = Object.assign({}, defaultProfile, JSON.parse(d.data().data)); renderProfile(); renderSkills(); }catch(e){} }
+    }).catch(function(e){ console.warn('profile load', e); });
+    db.collection('portfolio').doc('projects').get().then(function(d){
+      if(d.exists){ try{ projects = JSON.parse(d.data().data); renderProjects(); }catch(e){} }
+    }).catch(function(e){ console.warn('projects load', e); });
+  })();
 })();
 </script>
 <!-- GoatCounter visitor tracking (free, no Cloudflare) -->
