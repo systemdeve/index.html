@@ -2244,7 +2244,9 @@
   (function(){
     // Skip the counter inside sandboxed previews (e.g. Claude's preview pane),
     // where the security policy blocks gc.zgo.at. It loads normally on a real site.
-    var inPreview = location.protocol === 'about:' ||
+    // Set to true to turn the visitor counter back on.
+    var ENABLE_COUNTER = false;
+    var inPreview = !ENABLE_COUNTER || location.protocol === 'about:' ||
                     location.href.indexOf('about:srcdoc') === 0 ||
                     /claudeusercontent\.com$/.test(location.hostname);
     if(inPreview){
