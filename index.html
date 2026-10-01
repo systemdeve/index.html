@@ -1442,10 +1442,11 @@
   }
   function saveProfile(p){
     try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }catch(e){}
+    if(!fbReady || !auth.currentUser){ showToast('NOT saved online - please sign in again', 7000); }
     if(fbReady && auth.currentUser){
       db.collection('portfolio').doc('profile').set({ data: JSON.stringify(p), updated: firebase.firestore.FieldValue.serverTimestamp() })
-        .then(function(){ showToast('Saved online'); })
-        .catch(function(err){ console.error(err); showToast('Online save failed: ' + (err.code || 'error') + ' (picture may be too large)'); });
+        .then(function(){ showToast('✓ Saved online - visitors can now see it', 4000); })
+        .catch(function(err){ console.error(err); showToast('NOT saved online: ' + (err.code || err.message || 'error'), 7000); });
     }
     return true;
   }
@@ -1460,10 +1461,11 @@
   }
   function saveProjects(list){
     try{ localStorage.setItem(PROJECTS_KEY, JSON.stringify(list)); }catch(e){}
+    if(editMode && (!fbReady || !auth.currentUser)){ showToast('NOT saved online - please sign in again', 7000); }
     if(fbReady && auth.currentUser){
       db.collection('portfolio').doc('projects').set({ data: JSON.stringify(list), updated: firebase.firestore.FieldValue.serverTimestamp() })
-        .then(function(){ showToast('Saved online'); })
-        .catch(function(err){ console.error(err); showToast('Online save failed: ' + (err.code || 'error') + ' (picture may be too large)'); });
+        .then(function(){ showToast('✓ Saved online - visitors can now see it', 4000); })
+        .catch(function(err){ console.error(err); showToast('NOT saved online: ' + (err.code || err.message || 'error'), 7000); });
     }
     return true;
   }
@@ -2037,11 +2039,11 @@
   /* ---------- Toast ---------- */
   var toast = document.getElementById('toast');
   var toastTimer;
-  function showToast(msg){
+  function showToast(msg, ms){
     toast.textContent = msg;
     toast.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, 2200);
+    toastTimer = setTimeout(function(){ toast.classList.remove('show'); }, ms || 2200);
   }
 
   /* ---------- Floating hire-me widget ---------- */
